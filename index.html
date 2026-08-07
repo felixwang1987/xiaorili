@@ -3526,31 +3526,17 @@
 
       /*
        * 年龄计算验算：
-       * 输入：出生 1990-08-05，当前 2026-08-06；输出：36 岁
-       * 输入：出生 1990-08-05，当前 2026-03-01；输出：35 岁
-       * 输入：出生 1990-08-05，当前 2026-08-05；输出：36 岁
-       * 输入：出生 2026-08-05，当前 2026-08-06；输出：0 岁
-       * 输入：出生 2027-01-01，当前 2026-08-06；输出：不显示年数
+       * 输入：出生 2002-09-16，列表发生日期 2026-09-16；输出：24 岁
+       * 输入：出生 2002-09-16，选中发生日期 2026-09-16；输出：24 岁
+       * 输入：出生 2002-09-16，列表发生日期 2025-09-16；输出：23 岁
+       * 输入：出生 2026-08-06，选中发生日期 2026-08-06；输出：0 岁
+       * 输入：起始 2020-05-01 的纪念，列表发生日期 2026-05-01；输出：第 6 年
        */
-      function getAnniversarySuffix(record, displayYear) {
+      function getAnniversarySuffix(record, occurrenceDate) {
         if (record.repeat !== 'yearly' || !record.date) return '';
         const firstYear = Number(record.date.slice(0, 4));
-        if (!Number.isInteger(firstYear)) return '';
-
-        const referenceDate = new Date(displayYear, today.getMonth(), today.getDate());
-        let occurrenceDate = null;
-        if (record.calendar === 'solar') {
-          const month = Number(record.date.slice(5, 7));
-          const day = Number(record.date.slice(8, 10));
-          const candidate = new Date(displayYear, month - 1, day);
-          if (candidate.getMonth() === month - 1 && candidate.getDate() === day) occurrenceDate = candidate;
-        } else {
-          occurrenceDate = findLunarDateInGregorianYear(displayYear, record.lunarMonth, record.lunarDay);
-        }
-        if (!occurrenceDate) return '';
-
-        let diff = displayYear - firstYear;
-        if (occurrenceDate.getTime() > referenceDate.getTime()) diff -= 1;
+        if (!Number.isInteger(firstYear) || !(occurrenceDate instanceof Date) || Number.isNaN(occurrenceDate.getTime())) return '';
+        const diff = occurrenceDate.getFullYear() - firstYear;
         if (diff < 0) return '';
         if (record.type === 'birthday') return ` · ${diff} 岁`;
         return ` · 第 ${diff} 年`;
@@ -5156,7 +5142,7 @@
           entry.className = 'anniversary-detail-entry';
           entry.appendChild(createAnniversaryIcon(record.type));
           const text = document.createElement('span');
-          text.textContent = `${record.name}${getAnniversarySuffix(record, selectedDate.getFullYear())}`;
+          text.textContent = `${record.name}${getAnniversarySuffix(record, selectedDate)}`;
           entry.appendChild(text);
           value.appendChild(entry);
           row.append(label, value);
@@ -5311,7 +5297,7 @@
         return occurrences.sort((a, b) => a.date - b.date || a.record.name.localeCompare(b.record.name));
       }
 
-      function createAnniversaryItem(occurrence, displayYear) {
+      function createAnniversaryItem(occurrence) {
         const item = document.createElement('button');
         item.className = 'anniversary-item';
         item.type = 'button';
@@ -5321,7 +5307,7 @@
         date.textContent = `${pad(occurrence.date.getMonth() + 1)}-${pad(occurrence.date.getDate())}`;
         const name = document.createElement('span');
         name.className = 'anniversary-item-name';
-        name.textContent = `${occurrence.record.name}${getAnniversarySuffix(occurrence.record, displayYear)}`;
+        name.textContent = `${occurrence.record.name}${getAnniversarySuffix(occurrence.record, occurrence.date)}`;
         item.append(date, createAnniversaryIcon(occurrence.record.type), name);
         item.title = occurrence.record.note || occurrence.record.name;
         item.addEventListener('click', () => openAnniversaryDialog(occurrence.record));
@@ -5332,7 +5318,7 @@
         const occurrences = getMonthAnniversaryOccurrences(year, month);
         anniversaryListEl.innerHTML = '';
         anniversaryEmpty.hidden = occurrences.length > 0;
-        occurrences.forEach((occurrence) => anniversaryListEl.appendChild(createAnniversaryItem(occurrence, year)));
+        occurrences.forEach((occurrence) => anniversaryListEl.appendChild(createAnniversaryItem(occurrence)));
       }
 
       function findUpcomingAnniversaryDate(record) {
@@ -5361,7 +5347,7 @@
           button.type = 'button';
           const name = document.createElement('span');
           name.className = 'upcoming-item-name';
-          name.textContent = item.record.name;
+          name.textContent = `${item.record.name}${getAnniversarySuffix(item.record, item.date)}`;
           const date = document.createElement('span');
           date.className = 'upcoming-item-date';
           date.textContent = `${pad(item.date.getMonth() + 1)}-${pad(item.date.getDate())}`;
