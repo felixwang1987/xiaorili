@@ -2513,6 +2513,27 @@
         return match ? match.holiday : { id: null, zh: originalName, desc: null };
       }
 
+      const HOLIDAY_RENDER_RESOLUTION_CACHE = new Map();
+
+      function getHolidayRenderResolution(rawName) {
+        const sourceName = String(rawName || '').trim();
+        if (HOLIDAY_RENDER_RESOLUTION_CACHE.has(sourceName)) return HOLIDAY_RENDER_RESOLUTION_CACHE.get(sourceName);
+        const isSubstitute = sourceName.includes('补假');
+        const resolved = resolveHoliday(sourceName);
+        const resolution = {
+          resolvedId: resolved.id,
+          resolvedName: resolved.id ? resolved.zh : sourceName.replace(/补假/g, '').trim(),
+          displayName: resolved.id && isSubstitute ? `${resolved.zh}补假` : resolved.zh,
+          resolvedDesc: resolved.desc,
+        };
+        HOLIDAY_RENDER_RESOLUTION_CACHE.set(sourceName, resolution);
+        return resolution;
+      }
+
+      function prepareHolidayForRender(item) {
+        return { ...item, ...getHolidayRenderResolution(item.name) };
+      }
+
       const COMMON_SOLAR_FESTIVALS = [
         { month: 1, day: 1, name: '元旦' },
         { month: 5, day: 1, name: '劳动节' },
@@ -3649,19 +3670,29 @@
         if (LUNAR_YEAR_TABLE_CACHE.has(lunarYear)) return LUNAR_YEAR_TABLE_CACHE.get(lunarYear);
         const scanStart = new Date(lunarYear, 0, -59);
         let yearStart = null;
-        let nextYearStart = null;
-        for (let offset = 0; offset < 450; offset += 1) {
+
+        for (let offset = 0; offset < 200; offset += 1) {
           const date = new Date(scanStart.getFullYear(), scanStart.getMonth(), scanStart.getDate() + offset);
           const lunar = getLunarDateText(date);
           const isNewYear = normalizeAnniversaryLunarMonth(lunar) === 1 && Number(lunar.day) === 1 && !String(lunar.monthText).includes('闰');
-          if (!isNewYear) continue;
-          if (!yearStart && date.getFullYear() === lunarYear) yearStart = new Date(date);
-          else if (yearStart && date > yearStart) {
+          if (isNewYear && date.getFullYear() === lunarYear) {
+            yearStart = new Date(date);
+            break;
+          }
+        }
+        if (!yearStart) throw new Error(`无法建立 ${lunarYear} 农历年起点：第一段未找到正月初一`);
+
+        let nextYearStart = null;
+        for (let offset = 1; offset < 400; offset += 1) {
+          const date = new Date(yearStart.getFullYear(), yearStart.getMonth(), yearStart.getDate() + offset);
+          const lunar = getLunarDateText(date);
+          const isNewYear = normalizeAnniversaryLunarMonth(lunar) === 1 && Number(lunar.day) === 1 && !String(lunar.monthText).includes('闰');
+          if (isNewYear) {
             nextYearStart = new Date(date);
             break;
           }
         }
-        if (!yearStart || !nextYearStart) throw new Error(`无法建立 ${lunarYear} 农历年边界`);
+        if (!nextYearStart) throw new Error(`无法建立 ${lunarYear} 农历年终点：第二段未找到下一个正月初一`);
 
         const months = [];
         let currentMonth = null;
@@ -4368,7 +4399,7 @@
       }
 
       function getAllHolidayData() {
-        return dedupeHolidays(Object.values(holidayDataSets).flat());
+        return dedupeHolidays(Object.values(holidayDataSets).flat()).map(prepareHolidayForRender);
       }
 
       function getHolidayEntriesForDate(date) {
@@ -4400,7 +4431,8 @@
           day = Number(lunarDayNumFormatter.format(date));
         }
 
-        const monthNum = CN_MONTH_MAP[month] || parseInt(month, 10) || Number(month.replace(/\D/g, ''));
+        const normalizedMonth = month.replace(/^闰/, '');
+        const monthNum = CN_MONTH_MAP[normalizedMonth] || parseInt(normalizedMonth, 10) || Number(normalizedMonth.replace(/\D/g, ''));
 
         return {
           month: monthNum,
@@ -4428,7 +4460,7 @@
       function getPublicHolidayStatus(date) {
         const item = getHolidayEntriesForDate(date).find((holiday) => holiday.region === 'CN');
         if (!item) return null;
-        return { type: item.type === 'workday' ? 'work' : 'off', name: getHolidayDisplayName(item.name), region: item.region };
+        return { type: item.type === 'workday' ? 'work' : 'off', name: item.displayName, region: item.region };
       }
 
       function getFestivalNames(date) {
@@ -4452,19 +4484,12 @@
 
       function getHolidayItems(date) {
         return getHolidayEntriesForDate(date).map((item) => {
-          const displayName = getHolidayDisplayName(item.name);
           return {
             ...item,
-            text: item.type === 'workday' ? `班 ${displayName}` : displayName,
+            text: item.type === 'workday' ? `班 ${item.displayName}` : item.displayName,
             kind: item.type === 'workday' ? 'work' : item.type === 'substitute' ? 'my-substitute' : item.region === 'MY' ? 'my' : 'rest',
           };
         });
-      }
-
-      function getHolidayDisplayName(name) {
-        const hasSubstituteSuffix = String(name || '').includes('补假');
-        const resolved = resolveHoliday(name);
-        return `${resolved.zh}${resolved.id && hasSubstituteSuffix ? '补假' : ''}`;
       }
 
       function holidayItemDateText(item) {
@@ -4475,14 +4500,12 @@
 
       function openHolidayInfoDialog(item) {
         const isSubstitute = item.type === 'substitute' || String(item.name || '').includes('补假');
-        const sourceName = String(item.name || '').replace(/补假/g, '').trim();
-        const resolved = resolveHoliday(sourceName);
-        holidayInfoTitle.textContent = resolved.zh;
+        holidayInfoTitle.textContent = item.resolvedName;
         holidayInfoSubtitle.hidden = !isSubstitute;
         holidayInfoMeta.textContent = `${holidayItemDateText(item)} · ${item.region === 'CN' ? '中国' : '马来西亚'}`;
-        holidayInfoBody.textContent = resolved.desc || '暂无介绍';
-        holidayInfoOriginal.hidden = Boolean(resolved.id);
-        holidayInfoOriginal.textContent = resolved.id ? '' : `原始名称：${item.name}`;
+        holidayInfoBody.textContent = item.resolvedDesc || '暂无介绍';
+        holidayInfoOriginal.hidden = Boolean(item.resolvedId);
+        holidayInfoOriginal.textContent = item.resolvedId ? '' : `原始名称：${item.name}`;
         document.body.classList.add('modal-open');
         holidayInfoDialog.showModal();
       }
@@ -4993,7 +5016,7 @@
               const badge = document.createElement('span');
               badge.className = 'day-badge';
               badge.dataset.type = badgeType;
-              badge.title = matchingHolidays.map((holiday) => getHolidayDisplayName(holiday.name)).join('、') || title;
+              badge.title = matchingHolidays.map((holiday) => holiday.displayName).join('、') || title;
               dayBadges.appendChild(badge);
             });
 
@@ -5148,8 +5171,8 @@
        * 输出：05-01 ~ 05-05 劳动节
        * 输入：05-01 劳动节 region=CN；05-01 劳动节 region=MY
        * 输出：保持两条，不跨地区合并
-       * 输入：05-27 哈芝节；05-28 哈芝节第二天
-       * 输出：名称不同，保持两条
+       * 输入：05-27 Hari Raya Haji；05-28 Hari Raya Qurban (Day 2)
+       * 输出：05-27 ~ 05-28 哈芝节（规范 id 相同，合并为一条）
        * 输入：05-27 单日节假日
        * 输出：05-27，不显示 05-27 ~ 05-27
        */
@@ -5157,7 +5180,7 @@
         const groups = new Map();
 
         list.forEach((item) => {
-          const key = `${item.region}\u0000${item.name}`;
+          const key = `${item.region}\u0000${item.resolvedId || item.name}`;
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key).push(item);
         });
@@ -5186,7 +5209,7 @@
         return merged.sort((a, b) => (
           a.startDate.localeCompare(b.startDate)
           || a.region.localeCompare(b.region)
-          || a.name.localeCompare(b.name)
+          || a.resolvedName.localeCompare(b.resolvedName)
         ));
       }
 
@@ -5219,8 +5242,8 @@
 
         const name = document.createElement('span');
         name.className = 'holiday-name';
-        name.textContent = getHolidayDisplayName(item.name);
-        name.title = getHolidayDisplayName(item.name);
+        name.textContent = item.displayName;
+        name.title = item.displayName;
 
         const nameWrap = document.createElement('span');
         nameWrap.className = 'holiday-name-wrap';
