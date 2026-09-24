@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="小日历图标">
+  <rect width="180" height="180" fill="#1f955c"/>
+  <rect x="25" y="29" width="130" height="127" rx="21" fill="#fffdf9"/>
+  <path d="M25 66h130" stroke="#e9f1eb" stroke-width="3"/>
+  <rect x="49" y="22" width="13" height="30" rx="6.5" fill="#176f45"/>
+  <rect x="118" y="22" width="13" height="30" rx="6.5" fill="#176f45"/>
+  <text x="90" y="130" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="68" font-weight="700" fill="#1f955c">历</text>
+  <circle cx="135" cy="133" r="7" fill="#d93f0b"/>
+</svg>
