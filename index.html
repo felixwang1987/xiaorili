@@ -3392,7 +3392,7 @@
           anniversaries: loadAnniversaries(),
         };
         downloadJsonFile(snapshot, `xiaorili-backup-${formatDateKey(today)}.json`);
-        backupDataStatus.textContent = '备份文件已生成。';
+        backupDataStatus.textContent = `备份文件已生成：${snapshot.trips.length} 条出差，${snapshot.anniversaries.length} 条重要日子。`;
       }
 
       function normalizeBackupTrip(record) {
@@ -3419,11 +3419,14 @@
         if (!ANNIVERSARY_TYPES.some((item) => item.value === record.type)) return null;
         if (!ANNIVERSARY_CALENDARS.some((item) => item.value === record.calendar)) return null;
         if (!ANNIVERSARY_REPEATS.some((item) => item.value === record.repeat)) return null;
-        const date = parseDatePickerValue(record.date);
-        if (!date) return null;
-        const lunarMonth = Number(record.lunarMonth);
-        const lunarDay = Number(record.lunarDay);
-        if (!Number.isInteger(lunarMonth) || lunarMonth < 1 || lunarMonth > 12 || !Number.isInteger(lunarDay) || lunarDay < 1 || lunarDay > 30) return null;
+        const date = record.date == null ? null : parseDatePickerValue(record.date);
+        if (record.date != null && !date) return null;
+        if (record.calendar === 'solar' && !date) return null;
+        const lunarMonth = record.lunarMonth == null ? null : Number(record.lunarMonth);
+        const lunarDay = record.lunarDay == null ? null : Number(record.lunarDay);
+        if (lunarMonth !== null && (!Number.isInteger(lunarMonth) || lunarMonth < 1 || lunarMonth > 12)) return null;
+        if (lunarDay !== null && (!Number.isInteger(lunarDay) || lunarDay < 1 || lunarDay > 30)) return null;
+        if (record.calendar === 'lunar' && (lunarMonth === null || lunarDay === null)) return null;
         if (record.repeat === 'once' && record.calendar !== 'solar') return null;
         return {
           id: record.id,
@@ -3431,7 +3434,7 @@
           type: record.type,
           calendar: record.calendar,
           repeat: record.repeat,
-          date: formatDateKey(date),
+          date: date ? formatDateKey(date) : null,
           lunarMonth,
           lunarDay,
           note: record.note,
@@ -3474,7 +3477,7 @@
           trips = restoredTrips;
           anniversaries = restoredAnniversaries;
           render();
-          backupDataStatus.textContent = '数据恢复成功。';
+          backupDataStatus.textContent = `数据恢复成功：${restoredTrips.length} 条出差，${restoredAnniversaries.length} 条重要日子。`;
         } catch (error) {
           backupDataStatus.textContent = '恢复失败：无法读取该文件。';
         }
