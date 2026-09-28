@@ -1971,13 +1971,13 @@
       }
   @media (min-width: 921px) and (max-height: 900px) {
     .app-container {
-      padding-top: max(4px, env(safe-area-inset-top));
+      padding-top: max(24px, calc(env(safe-area-inset-top) + 20px));
       padding-bottom: max(12px, env(safe-area-inset-bottom));
       padding-inline: 20px;
     }
 
     .calendar-surface {
-      grid-template-rows: 44px repeat(6, clamp(86px, calc(16.6667dvh - 30px), 104px));
+      grid-template-rows: 44px repeat(6, clamp(86px, calc(16.6667dvh - 33px), 104px));
     }
       }
     </style>
